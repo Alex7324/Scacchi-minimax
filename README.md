@@ -1,40 +1,42 @@
 # Motore di scacchi in Python
 
-Progetto di studio: una scacchiera e un motore che valuta la posizione e gioca
-contro un avversario umano, scritto in Python senza librerie esterne.
+Scacchiera e motore di gioco scritti in Python puro, senza librerie esterne e
+senza librerie di scacchi: le regole sono implementate da zero.
 
-L'obiettivo finale è arrivare a un motore che sceglie le proprie mosse con
-l'algoritmo **minimax** e la **potatura alfa-beta**, con un'interfaccia web per
-poterci giocare comodamente dal browser.
+L'obiettivo finale è un motore che sceglie le proprie mosse con l'algoritmo
+**minimax** e la **potatura alfa-beta**, con un'interfaccia web che permetta di
+giocarci dal browser.
 
-## Stato attuale
+## Stato del progetto
 
-Il progetto è in costruzione. Al momento funziona:
+In sviluppo. Attualmente implementati:
 
 - rappresentazione della scacchiera e stampa da terminale
 - generazione delle mosse di tutti i pezzi: pedone, torre, cavallo, alfiere,
   donna, re
 
-Le mosse generate sono **pseudo-legali**: dicono dove un pezzo può arrivare
-secondo il proprio movimento, ma non tengono ancora conto dello scacco. Il re
-può quindi finire su una casella attaccata, e un pezzo può muoversi anche se
-così espone il proprio re. È il prossimo pezzo di lavoro.
+Le mosse generate sono **pseudo-legali**: descrivono dove un pezzo può arrivare
+in base al proprio movimento, ma non tengono conto dello scacco. Il re può
+quindi raggiungere una casella attaccata, e un pezzo può muoversi anche quando
+ciò espone il proprio re. Il rilevamento dello scacco non è ancora
+implementato.
 
-## Come provarlo
+## Requisiti e avvio
 
-Serve solo Python 3, nessuna dipendenza da installare.
+Richiede Python 3. Nessuna dipendenza da installare.
 
 ```bash
 python scacchiera.py
 ```
 
-Stampa la posizione iniziale e alcune prove di generazione delle mosse.
+Vengono stampate la posizione iniziale e alcuni esempi di generazione delle
+mosse.
 
-## Come è rappresentata la scacchiera
+## Rappresentazione della scacchiera
 
 Una **lista di 8 liste**, una per riga, con accesso `board[riga][colonna]`.
 
-I pezzi sono lettere singole, come nella notazione FEN:
+I pezzi sono lettere singole, secondo la notazione FEN:
 
 | lettera | pezzo   |
 | ------- | ------- |
@@ -47,39 +49,40 @@ I pezzi sono lettere singole, come nella notazione FEN:
 
 **Maiuscolo = bianco**, **minuscolo = nero**, `.` = casella vuota.
 
-La riga `0` della lista è la riga **8** della scacchiera (dove stanno i pezzi
-neri) e la riga `7` è la riga **1** (pezzi bianchi). Quindi la scacchiera si
-stampa così com'è, senza girarla, e il bianco "sale" verso righe di indice più
-basso.
+La riga `0` della lista corrisponde alla riga **8** della scacchiera, quella dei
+pezzi neri; la riga `7` corrisponde alla riga **1**, quella dei pezzi bianchi.
+In questo modo la scacchiera si stampa nell'ordine in cui è memorizzata, senza
+inversioni, e il bianco avanza verso indici di riga decrescenti.
 
-Le caselle si passano come tuple `(riga, colonna)`: la torre in a1 è `(7, 0)`.
-La funzione `nome_casella` converte in notazione scacchistica per leggere
-l'output a colpo d'occhio.
+Le caselle sono tuple `(riga, colonna)`: la torre in a1 è `(7, 0)`. La funzione
+`nome_casella` converte una tupla nella notazione scacchistica corrispondente.
 
-## Com'è organizzato il codice
+## Struttura del codice
 
-Negli scacchi i modi di muoversi sono sostanzialmente due, e il codice segue
-quella divisione invece di ripetere la stessa logica per ogni pezzo:
+Negli scacchi i modi di muoversi sono sostanzialmente due, e il codice è
+organizzato attorno a questa distinzione invece di ripetere la stessa logica per
+ogni pezzo:
 
-- `mosse_scorrevoli` — per torre, alfiere e donna, che scivolano lungo una
-  direzione finché non incontrano un bordo o un pezzo. Cambia solo l'elenco
-  delle direzioni, e la donna è semplicemente torre + alfiere.
-- `mosse_di_un_passo` — per cavallo e re, che hanno una lista fissa di caselle
-  raggiungibili senza scorrere.
+- `mosse_scorrevoli` — torre, alfiere e donna, che scorrono lungo una direzione
+  finché non incontrano un bordo o un pezzo. Cambia solo l'elenco delle
+  direzioni: la donna è l'unione di quelle della torre e dell'alfiere.
+- `mosse_di_un_passo` — cavallo e re, che raggiungono una lista fissa di caselle
+  senza scorrere.
 
-Il pedone ha una funzione tutta sua, perché è l'unico pezzo che si muove in un
-modo e mangia in un altro.
+Il pedone ha una funzione dedicata, essendo l'unico pezzo che si muove in un
+modo e cattura in un altro.
 
-`mosse(board, casella)` guarda che pezzo c'è e chiama la funzione giusta.
+`mosse(board, casella)` individua il pezzo presente sulla casella e delega alla
+funzione corrispondente.
 
-## Obiettivi
+## Roadmap
 
 Regole del gioco:
 
 - [x] scacchiera, stampa e spostamento di un pezzo
 - [x] mosse pseudo-legali di tutti i pezzi
 - [ ] rilevamento dello scacco
-- [ ] mosse legali: scartare quelle che lasciano il proprio re sotto scacco
+- [ ] mosse legali: esclusione di quelle che lasciano il proprio re sotto scacco
 - [ ] scacco matto e stallo
 - [ ] arrocco, en passant, promozione del pedone
 
@@ -97,10 +100,10 @@ Interfaccia:
 
 ## Scelte di progetto
 
-**Niente bitboard.** Sono la rappresentazione usata dai motori seri e sarebbero
-più veloci, ma rendono molto più difficile la parte più lunga del lavoro — la
-generazione delle mosse legali. Con una lista 8×8 il codice resta leggibile e il
-progetto arriva in fondo; l'ottimizzazione, semmai, viene dopo.
+**Nessuna bitboard.** Sono la rappresentazione adottata dai motori più
+performanti, ma complicano sensibilmente la parte più corposa del lavoro, cioè
+la generazione delle mosse legali. Con una lista 8×8 il codice resta leggibile;
+l'ottimizzazione della rappresentazione è eventualmente un passo successivo.
 
-**Niente librerie di scacchi.** Le regole sono scritte a mano: il punto del
-progetto è capirle, non delegarle.
+**Nessuna libreria di scacchi.** L'implementazione delle regole rientra tra gli
+obiettivi del progetto e non viene delegata a dipendenze esterne.
