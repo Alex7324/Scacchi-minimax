@@ -1,0 +1,11 @@
+# file generati da Python
+__pycache__/
+*.pyc
+
+# ambienti virtuali
+.venv/
+venv/
+
+# roba dell'editor
+.vscode/
+.idea/
