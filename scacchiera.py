@@ -30,9 +30,17 @@ def stampa(board):
 
 
 def nome_casella(casella):
-    # da (riga, colonna) a notazione scacchistica: (7, 0) -> "a1"
-    r, c = casella
-    return 'abcdefgh'[c] + str(8 - r)
+    # da (riga, colonna) a notazione scacchistica: (7, 0) -> "a1".
+    # una mossa di promozione ha un terzo elemento con il pezzo
+    # scelto, e in quel caso lo aggiungo in fondo: (0, 2, 'N') -> "c8=N"
+    r = casella[0]
+    c = casella[1]
+    nome = 'abcdefgh'[c] + str(8 - r)
+
+    if len(casella) == 3:
+        nome += '=' + casella[2].upper()
+
+    return nome
 
 
 def copia_board(board):
@@ -146,20 +154,20 @@ def mosse_pedone(board, casella, en_passant=None):
         avanti = 1
         riga_iniziale = 1
 
-    mosse = []
+    arrivi = []
 
     # 1) un passo avanti, ma solo se la casella davanti e' LIBERA.
     #    il pedone andando dritto non mangia mai
     nr = r + avanti
     if 0 <= nr < 8 and board[nr][c] == '.':
-        mosse.append((nr, c))
+        arrivi.append((nr, c))
 
         # 2) il doppio passo, solo dalla riga di partenza.
         #    e' annidato dentro l'if di sopra apposta: se la prima
         #    casella e' occupata il pedone non puo' scavalcarla,
         #    quindi la doppia non esiste nemmeno
         if r == riga_iniziale and board[r + 2 * avanti][c] == '.':
-            mosse.append((r + 2 * avanti, c))
+            arrivi.append((r + 2 * avanti, c))
 
     # 3) le catture, solo in diagonale e solo se li' c'e' davvero
     #    un pezzo avversario
@@ -168,7 +176,7 @@ def mosse_pedone(board, casella, en_passant=None):
         if 0 <= nr < 8 and 0 <= nc < 8:
             contenuto = board[nr][nc]
             if contenuto != '.' and contenuto.isupper() != io_sono_bianco:
-                mosse.append((nr, nc))
+                arrivi.append((nr, nc))
 
     # 4) EN PASSANT: l'unico caso in cui il pedone va in diagonale
     #    su una casella VUOTA. succede solo subito dopo che un pedone
@@ -176,7 +184,22 @@ def mosse_pedone(board, casella, en_passant=None):
     if en_passant is not None:
         for dc in (-1, 1):
             if (nr, c + dc) == en_passant:
-                mosse.append(en_passant)
+                arrivi.append(en_passant)
+
+    # 5) PROMOZIONE: arrivare in fondo non e' UNA mossa ma QUATTRO.
+    #    scegliere donna, torre, alfiere o cavallo porta a posizioni
+    #    diverse, quindi il pezzo scelto fa parte della mossa e viaggia
+    #    con lei come terzo elemento della tupla
+    ultima_traversa = 0 if io_sono_bianco else 7
+    scelte = 'QRBN' if io_sono_bianco else 'qrbn'
+
+    mosse = []
+    for arrivo in arrivi:
+        if arrivo[0] == ultima_traversa:
+            for pezzo_scelto in scelte:
+                mosse.append((arrivo[0], arrivo[1], pezzo_scelto))
+        else:
+            mosse.append(arrivo)
 
     return mosse
 
@@ -263,7 +286,10 @@ def applica(board, partenza, arrivo, en_passant=None):
     # sposta il pezzo gestendo i tre casi in cui una mossa cambia
     # la scacchiera in modo diverso dal solito "da qui a li'"
     r1, c1 = partenza
-    r2, c2 = arrivo
+    r2 = arrivo[0]
+    c2 = arrivo[1]
+    # terzo elemento presente solo nelle mosse di promozione
+    promozione = arrivo[2] if len(arrivo) == 3 else None
     pezzo = board[r1][c1]
 
     # EN PASSANT: il pedone catturato non sta sulla casella di arrivo,
@@ -284,13 +310,15 @@ def applica(board, partenza, arrivo, en_passant=None):
     board[r2][c2] = pezzo
     board[r1][c1] = '.'
 
-    # PROMOZIONE: il pedone che arriva in fondo diventa donna.
-    # in teoria si potrebbe scegliere anche torre, alfiere o cavallo,
-    # ma nella pratica quasi nessuno lo fa
-    if pezzo == 'P' and r2 == 0:
-        board[r2][c2] = 'Q'
-    elif pezzo == 'p' and r2 == 7:
-        board[r2][c2] = 'q'
+    # PROMOZIONE: il pedone che arriva in fondo diventa il pezzo che
+    # la mossa si porta dietro. se la mossa non lo dice (per esempio
+    # quando si sposta un pezzo a mano in una prova) metto donna,
+    # perche' un pedone sull'ultima traversa non e' una posizione valida
+    if pezzo.lower() == 'p' and r2 in (0, 7):
+        if promozione is not None:
+            board[r2][c2] = promozione
+        else:
+            board[r2][c2] = 'Q' if pezzo.isupper() else 'q'
 
 
 def muovi(board, partenza, arrivo):
@@ -459,7 +487,8 @@ def mosse_del_turno(partita):
 def esegui_mossa(partita, partenza, arrivo):
     board = partita['board']
     r1, c1 = partenza
-    r2, c2 = arrivo
+    r2 = arrivo[0]
+    c2 = arrivo[1]
     pezzo = board[r1][c1]
 
     applica(board, partenza, arrivo, partita['en_passant'])
@@ -483,7 +512,10 @@ def esegui_mossa(partita, partenza, arrivo):
         diritti['k'] = False
         diritti['q'] = False
 
-    for angolo in (partenza, arrivo):
+    # uso (r2, c2) e non "arrivo": una mossa di promozione ha tre
+    # elementi e non combacerebbe mai con un angolo. serve davvero,
+    # perche' un pedone puo' promuovere CATTURANDO la torre nell'angolo
+    for angolo in (partenza, (r2, c2)):
         if angolo == (7, 7):
             diritti['K'] = False
         elif angolo == (7, 0):
@@ -504,80 +536,87 @@ def elenco(mosse_trovate):
     return sorted(nome_casella(m) for m in mosse_trovate)
 
 
-print('--- matto e stallo ---')
+def prove():
+    print('--- matto e stallo ---')
 
-b = board_vuota()
-b[0][7] = 'k'   # re nero in h8
-b[0][0] = 'R'   # torre bianca in a8: scacco sull'ottava
-b[1][0] = 'R'   # torre bianca in a7: toglie la settima
-b[7][4] = 'K'
-print('matto di scala   -> matto:', scacco_matto(b, False),
-      ' stallo:', stallo(b, False))
+    b = board_vuota()
+    b[0][7] = 'k'   # re nero in h8
+    b[0][0] = 'R'   # torre bianca in a8: scacco sull'ottava
+    b[1][0] = 'R'   # torre bianca in a7: toglie la settima
+    b[7][4] = 'K'
+    print('matto di scala   -> matto:', scacco_matto(b, False),
+          ' stallo:', stallo(b, False))
 
-b = board_vuota()
-b[0][0] = 'k'   # re nero in a8
-b[1][2] = 'Q'   # donna bianca in c7
-b[7][4] = 'K'
-print('re nero in a8, donna bianca in c7 -> matto:', scacco_matto(b, False),
-      ' stallo:', stallo(b, False))
+    b = board_vuota()
+    b[0][0] = 'k'   # re nero in a8
+    b[1][2] = 'Q'   # donna bianca in c7
+    b[7][4] = 'K'
+    print('re nero in a8, donna bianca in c7 -> matto:', scacco_matto(b, False),
+          ' stallo:', stallo(b, False))
+
+    print()
+    print('--- promozione ---')
+
+    b = board_vuota()
+    b[1][0] = 'P'   # pedone bianco in a7
+    b[7][4] = 'K'
+    b[0][7] = 'k'
+    print('mosse del pedone bianco in a7:', elenco(mosse_legali(b, (1, 0))))
+
+    muovi(b, (1, 0), (0, 0, 'N'))
+    print('promuovendo a cavallo, in a8 compare:', b[0][0])
+
+    print()
+    print('--- en passant ---')
+
+    p = partita_iniziale()
+    esegui_mossa(p, (6, 4), (4, 4))   # 1. e4
+    esegui_mossa(p, (1, 0), (3, 0))   # 1... a5
+    esegui_mossa(p, (4, 4), (3, 4))   # 2. e5
+    esegui_mossa(p, (1, 3), (3, 3))   # 2... d5, doppio passo accanto a e5
+    print('il nero ha appena giocato d5, casella di en passant:',
+          nome_casella(p['en_passant']))
+    print('mosse del pedone bianco in e5:', elenco(mosse_del_pezzo(p, (3, 4))))
+
+    esegui_mossa(p, (3, 4), (2, 3))   # 3. exd6 en passant
+    print('dopo exd6, il pedone nero in d5 e\' ancora li\'?',
+          p['board'][3][3] != '.')
+
+    print()
+    print('--- arrocco ---')
+
+    b = board_vuota()
+    b[7][4] = 'K'   # re bianco in e1
+    b[7][0] = 'R'   # torre bianca in a1
+    b[7][7] = 'R'   # torre bianca in h1
+    b[0][4] = 'k'
+    diritti = {'K': True, 'Q': True, 'k': True, 'q': True}
+    print('re e1 con entrambe le torri:',
+          elenco(mosse_legali(b, (7, 4), None, diritti)))
+
+    b[0][5] = 'r'   # torre nera in f8: tiene sotto tiro la colonna f
+    print('   ...con una torre nera che controlla la colonna f:',
+          elenco(mosse_legali(b, (7, 4), None, diritti)))
+
+    b[0][5] = '.'
+    diritti_persi = {'K': False, 'Q': True, 'k': True, 'q': True}
+    print('   ...dopo che la torre in h1 si e\' mossa:',
+          elenco(mosse_legali(b, (7, 4), None, diritti_persi)))
+
+    p = partita_iniziale()
+    for mossa in [((6, 4), (4, 4)), ((1, 4), (3, 4)),      # e4 e5
+                  ((7, 6), (5, 5)), ((0, 6), (2, 5)),      # Cf3 Cf6
+                  ((7, 5), (4, 2)), ((0, 5), (3, 2))]:     # Ac4 Ac5
+        esegui_mossa(p, mossa[0], mossa[1])
+    print('partita vera, il bianco ora puo\' arroccare:',
+          elenco(mosse_del_pezzo(p, (7, 4))))
+    esegui_mossa(p, (7, 4), (7, 6))
+    print('dopo l\'arrocco corto:')
+    stampa(p['board'])
 
 
-print()
-print('--- promozione ---')
-
-b = board_vuota()
-b[1][0] = 'P'   # pedone bianco in a7
-b[7][4] = 'K'
-b[0][7] = 'k'
-muovi(b, (1, 0), (0, 0))
-print('pedone bianco da a7 ad a8, diventa:', b[0][0])
-
-
-print()
-print('--- en passant ---')
-
-p = partita_iniziale()
-esegui_mossa(p, (6, 4), (4, 4))   # 1. e4
-esegui_mossa(p, (1, 0), (3, 0))   # 1... a5
-esegui_mossa(p, (4, 4), (3, 4))   # 2. e5
-esegui_mossa(p, (1, 3), (3, 3))   # 2... d5, doppio passo accanto al pedone e5
-print('il nero ha appena giocato d5, casella di en passant:',
-      nome_casella(p['en_passant']))
-print('mosse del pedone bianco in e5:', elenco(mosse_del_pezzo(p, (3, 4))))
-
-esegui_mossa(p, (3, 4), (2, 3))   # 3. exd6 en passant
-print('dopo exd6, il pedone nero in d5 e\' ancora li\'?',
-      p['board'][3][3] != '.')
-
-
-print()
-print('--- arrocco ---')
-
-b = board_vuota()
-b[7][4] = 'K'   # re bianco in e1
-b[7][0] = 'R'   # torre bianca in a1
-b[7][7] = 'R'   # torre bianca in h1
-b[0][4] = 'k'
-diritti = {'K': True, 'Q': True, 'k': True, 'q': True}
-print('re e1 con entrambe le torri:',
-      elenco(mosse_legali(b, (7, 4), None, diritti)))
-
-b[0][5] = 'r'   # torre nera in f8: tiene sotto tiro tutta la colonna f
-print('   ...con una torre nera che controlla la colonna f:',
-      elenco(mosse_legali(b, (7, 4), None, diritti)))
-
-b[0][5] = '.'
-diritti_persi = {'K': False, 'Q': True, 'k': True, 'q': True}
-print('   ...dopo che la torre in h1 si e\' mossa:',
-      elenco(mosse_legali(b, (7, 4), None, diritti_persi)))
-
-p = partita_iniziale()
-for mossa in [((6, 4), (4, 4)), ((1, 4), (3, 4)),      # e4 e5
-              ((7, 6), (5, 5)), ((0, 6), (2, 5)),      # Cf3 Cf6
-              ((7, 5), (4, 2)), ((0, 5), (3, 2))]:     # Ac4 Ac5
-    esegui_mossa(p, mossa[0], mossa[1])
-print('partita vera, il bianco ora puo\' arroccare:',
-      elenco(mosse_del_pezzo(p, (7, 4))))
-esegui_mossa(p, (7, 4), (7, 6))
-print('dopo l\'arrocco corto:')
-stampa(p['board'])
+# questo blocco parte solo se lancio "python scacchiera.py".
+# se invece un altro file fa "import scacchiera", non stampa niente:
+# senza questa riga ogni import sputerebbe fuori tutte le prove
+if __name__ == '__main__':
+    prove()

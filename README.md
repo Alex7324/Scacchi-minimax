@@ -35,8 +35,24 @@ Richiede Python 3. Nessuna dipendenza da installare.
 python scacchiera.py
 ```
 
-Vengono stampate la posizione iniziale e alcuni esempi di generazione delle
-mosse.
+Vengono stampate alcune prove di generazione delle mosse.
+
+## Test
+
+La correttezza delle regole è verificata con il **perft**: si contano tutte le
+posizioni raggiungibili in N mosse da una posizione data e si confronta il
+totale con i valori di riferimento noti. Un solo caso sbagliato — una
+inchiodatura non rilevata, un arrocco concesso a torto — altera il conteggio.
+
+```bash
+python test_perft.py 4
+```
+
+Sono coperte cinque posizioni scelte per sollecitare parti diverse delle regole:
+la posizione iniziale, una posizione con arrocchi da entrambi i lati e molte
+catture, un finale con en passant e scacchi di scoperta, e due posizioni con
+promozioni. Tutti i conteggi corrispondono, fino a 197281 posizioni per la
+posizione iniziale a profondità 4.
 
 ## Rappresentazione della scacchiera
 
@@ -62,6 +78,11 @@ inversioni, e il bianco avanza verso indici di riga decrescenti.
 
 Le caselle sono tuple `(riga, colonna)`: la torre in a1 è `(7, 0)`. La funzione
 `nome_casella` converte una tupla nella notazione scacchistica corrispondente.
+
+Fa eccezione la promozione: scegliere donna, torre, alfiere o cavallo porta a
+posizioni diverse, quindi il pezzo scelto fa parte della mossa e la casella di
+arrivo diventa `(riga, colonna, pezzo)` — per esempio `(0, 2, 'N')`, che
+`nome_casella` scrive come `c8=N`.
 
 ## Struttura del codice
 
