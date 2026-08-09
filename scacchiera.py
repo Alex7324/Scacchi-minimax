@@ -205,6 +205,51 @@ def mosse(board, casella):
 
 
 # ---------------------------------------------------------------
+# lo scacco
+# ---------------------------------------------------------------
+
+def trova_re(board, bianco):
+    # scorre la scacchiera finche' non trova il re del colore chiesto.
+    # bianco=True cerca 'K', bianco=False cerca 'k'
+    re = 'K' if bianco else 'k'
+
+    for r in range(8):
+        for c in range(8):
+            if board[r][c] == re:
+                return (r, c)
+
+    return None   # nessun re sulla scacchiera (capita solo nelle prove)
+
+
+def sotto_scacco(board, bianco):
+    # il re e' sotto scacco se ESISTE ALMENO UN pezzo avversario che ha
+    # la casella del re tra le proprie mosse.
+    # non serve nessuna logica nuova: le mosse le sappiamo gia' calcolare
+    casella_re = trova_re(board, bianco)
+
+    if casella_re is None:
+        return False
+
+    for r in range(8):
+        for c in range(8):
+            pezzo = board[r][c]
+
+            if pezzo == '.':
+                continue    # casella vuota: non c'e' nessuno da chiedere
+
+            if pezzo.isupper() == bianco:
+                continue    # e' un pezzo mio: non puo' attaccare il mio re
+
+            # e' un pezzo avversario: guardo dove arriva.
+            # appena ne trovo uno che arriva sul re ho finito,
+            # non serve controllare gli altri
+            if casella_re in mosse(board, (r, c)):
+                return True
+
+    return False
+
+
+# ---------------------------------------------------------------
 # prove
 # ---------------------------------------------------------------
 
@@ -240,3 +285,40 @@ b[4][4] = 'K'   # re bianco in e4
 b[3][4] = 'p'   # pedone nero in e5
 b[5][4] = 'P'   # pedone bianco in e3
 prova('re e4, pedone nero in e5 e pedone bianco in e3:', b, (4, 4))
+
+
+print()
+print('--- scacco ---')
+
+
+def prova_scacco(titolo, board):
+    print(titolo)
+    print('  bianco sotto scacco?', sotto_scacco(board, True))
+
+
+prova_scacco('posizione iniziale:', board_iniziale())
+
+b = board_vuota()
+b[7][4] = 'K'   # re bianco in e1
+b[0][4] = 'r'   # torre nera in e8, stessa colonna
+prova_scacco('re bianco e1, torre nera e8 sulla stessa colonna:', b)
+
+b[4][4] = 'P'   # pedone bianco in e4, in mezzo ai due
+prova_scacco('   ...con un pedone bianco in e4 a fare da scudo:', b)
+
+b = board_vuota()
+b[7][4] = 'K'   # re bianco in e1
+b[5][5] = 'n'   # cavallo nero in f3
+b[6][4] = 'P'   # pedone bianco in e2: non serve a niente, il cavallo salta
+b[6][5] = 'P'   # pedone bianco in f2
+prova_scacco('re bianco e1, cavallo nero f3 (i pedoni non lo fermano):', b)
+
+b = board_vuota()
+b[4][4] = 'K'   # re bianco in e4
+b[3][3] = 'p'   # pedone nero in d5: attacca in diagonale
+prova_scacco('re bianco e4, pedone nero in d5 (diagonale):', b)
+
+b = board_vuota()
+b[4][4] = 'K'   # re bianco in e4
+b[3][4] = 'p'   # pedone nero in e5: gli sta davanti, ma non attacca
+prova_scacco('re bianco e4, pedone nero in e5 (frontale):', b)

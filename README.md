@@ -14,12 +14,13 @@ In sviluppo. Attualmente implementati:
 - rappresentazione della scacchiera e stampa da terminale
 - generazione delle mosse di tutti i pezzi: pedone, torre, cavallo, alfiere,
   donna, re
+- rilevamento dello scacco
 
 Le mosse generate sono **pseudo-legali**: descrivono dove un pezzo può arrivare
 in base al proprio movimento, ma non tengono conto dello scacco. Il re può
 quindi raggiungere una casella attaccata, e un pezzo può muoversi anche quando
-ciò espone il proprio re. Il rilevamento dello scacco non è ancora
-implementato.
+ciò espone il proprio re. Il filtro che scarta queste mosse illegali non è
+ancora implementato.
 
 ## Requisiti e avvio
 
@@ -81,7 +82,7 @@ Regole del gioco:
 
 - [x] scacchiera, stampa e spostamento di un pezzo
 - [x] mosse pseudo-legali di tutti i pezzi
-- [ ] rilevamento dello scacco
+- [x] rilevamento dello scacco
 - [ ] mosse legali: esclusione di quelle che lasciano il proprio re sotto scacco
 - [ ] scacco matto e stallo
 - [ ] arrocco, en passant, promozione del pedone
