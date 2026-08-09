@@ -29,17 +29,18 @@ def stampa(board):
         print()
 
 
-def muovi(board, partenza, arrivo):
-    r1, c1 = partenza
-    r2, c2 = arrivo
-    board[r2][c2] = board[r1][c1]
-    board[r1][c1] = '.'
-
-
 def nome_casella(casella):
     # da (riga, colonna) a notazione scacchistica: (7, 0) -> "a1"
     r, c = casella
     return 'abcdefgh'[c] + str(8 - r)
+
+
+def copia_board(board):
+    # copia VERA della scacchiera: una lista nuova per ogni riga.
+    # attenzione, board[:] oppure list(board) NON bastano: creerebbero
+    # una lista nuova che pero' contiene le STESSE otto righe, e
+    # modificando la copia si modificherebbe anche l'originale
+    return [riga[:] for riga in board]
 
 
 # ---------------------------------------------------------------
@@ -60,9 +61,7 @@ SALTI_CAVALLO = [(-2, -1), (-2, 1), (-1, -2), (-1, 2),
 
 def mosse_scorrevoli(board, casella, direzioni):
     # per torre, alfiere e donna: scivolano lungo una direzione
-    # finche' qualcosa non le ferma.
-    # e' esattamente il codice della torre di prima, con le direzioni
-    # passate da fuori invece che scritte dentro
+    # finche' qualcosa non le ferma
     r, c = casella
     io_sono_bianco = board[r][c].isupper()
     mosse = []
@@ -93,8 +92,7 @@ def mosse_scorrevoli(board, casella, direzioni):
 
 def mosse_di_un_passo(board, casella, salti):
     # per cavallo e re: una lista fissa di caselle raggiungibili,
-    # senza scorrere. niente while, solo un controllo per casella.
-    # al cavallo non importa cosa c'e' in mezzo, perche' salta
+    # senza scorrere. niente while, solo un controllo per casella
     r, c = casella
     io_sono_bianco = board[r][c].isupper()
     mosse = []
@@ -134,12 +132,7 @@ def mosse_cavallo(board, casella):
     return mosse_di_un_passo(board, casella, SALTI_CAVALLO)
 
 
-def mosse_re(board, casella):
-    # stesse 8 direzioni della donna, ma un passo solo
-    return mosse_di_un_passo(board, casella, DIREZIONI_DONNA)
-
-
-def mosse_pedone(board, casella):
+def mosse_pedone(board, casella, en_passant=None):
     r, c = casella
     io_sono_bianco = board[r][c].isupper()
 
@@ -169,8 +162,7 @@ def mosse_pedone(board, casella):
             mosse.append((r + 2 * avanti, c))
 
     # 3) le catture, solo in diagonale e solo se li' c'e' davvero
-    #    un pezzo avversario. e' il contrario del movimento normale:
-    #    in diagonale il pedone va SOLO se c'e' qualcosa da mangiare
+    #    un pezzo avversario
     for dc in (-1, 1):
         nc = c + dc
         if 0 <= nr < 8 and 0 <= nc < 8:
@@ -178,10 +170,69 @@ def mosse_pedone(board, casella):
             if contenuto != '.' and contenuto.isupper() != io_sono_bianco:
                 mosse.append((nr, nc))
 
+    # 4) EN PASSANT: l'unico caso in cui il pedone va in diagonale
+    #    su una casella VUOTA. succede solo subito dopo che un pedone
+    #    avversario ha fatto il doppio passo passandoci accanto
+    if en_passant is not None:
+        for dc in (-1, 1):
+            if (nr, c + dc) == en_passant:
+                mosse.append(en_passant)
+
     return mosse
 
 
-def mosse(board, casella):
+def mosse_re(board, casella, arrocco=None):
+    # stesse 8 direzioni della donna, ma un passo solo
+    normali = mosse_di_un_passo(board, casella, DIREZIONI_DONNA)
+
+    if arrocco is None:
+        return normali
+
+    return normali + mosse_arrocco(board, casella, arrocco)
+
+
+def mosse_arrocco(board, casella, arrocco):
+    # l'arrocco ha quattro condizioni, e servono tutte:
+    #  - re e torre non si sono ancora mossi (lo dice il dizionario)
+    #  - le caselle tra i due sono libere
+    #  - il re non e' sotto scacco adesso
+    #  - il re non attraversa una casella attaccata
+    # la casella di ARRIVO non la controllo qui: ci pensa gia'
+    # mosse_legali, che scarta le mosse che finiscono sotto scacco
+    r, c = casella
+    bianco = board[r][c].isupper()
+    riga = 7 if bianco else 0
+
+    # se il re non e' a casa sua non c'e' niente da fare
+    if (r, c) != (riga, 4):
+        return []
+
+    if sotto_scacco(board, bianco):
+        return []
+
+    mosse = []
+    lato_re = 'K' if bianco else 'k'
+    lato_donna = 'Q' if bianco else 'q'
+
+    # lato re: f e g libere, il re passa da f
+    if arrocco.get(lato_re):
+        if board[riga][5] == '.' and board[riga][6] == '.':
+            if not casella_attaccata(board, (riga, 5), bianco):
+                mosse.append((riga, 6))
+
+    # lato donna: b, c e d libere, il re passa da d
+    # (la casella b la attraversa la TORRE, e alla torre non importa
+    #  se e' attaccata: solo il re non puo' passare sotto tiro)
+    if arrocco.get(lato_donna):
+        if board[riga][1] == '.' and board[riga][2] == '.' \
+                and board[riga][3] == '.':
+            if not casella_attaccata(board, (riga, 3), bianco):
+                mosse.append((riga, 2))
+
+    return mosse
+
+
+def mosse(board, casella, en_passant=None, arrocco=None):
     # guarda che pezzo c'e' sulla casella e chiama la funzione giusta.
     # .lower() serve a trattare 'R' e 'r' allo stesso modo: le regole
     # di movimento sono le stesse, cambia solo il colore
@@ -189,7 +240,7 @@ def mosse(board, casella):
     pezzo = board[r][c].lower()
 
     if pezzo == 'p':
-        return mosse_pedone(board, casella)
+        return mosse_pedone(board, casella, en_passant)
     if pezzo == 'r':
         return mosse_torre(board, casella)
     if pezzo == 'n':
@@ -199,18 +250,100 @@ def mosse(board, casella):
     if pezzo == 'q':
         return mosse_donna(board, casella)
     if pezzo == 'k':
-        return mosse_re(board, casella)
+        return mosse_re(board, casella, arrocco)
 
     return []   # casella vuota: nessuna mossa
+
+
+# ---------------------------------------------------------------
+# eseguire una mossa sulla scacchiera
+# ---------------------------------------------------------------
+
+def applica(board, partenza, arrivo, en_passant=None):
+    # sposta il pezzo gestendo i tre casi in cui una mossa cambia
+    # la scacchiera in modo diverso dal solito "da qui a li'"
+    r1, c1 = partenza
+    r2, c2 = arrivo
+    pezzo = board[r1][c1]
+
+    # EN PASSANT: il pedone catturato non sta sulla casella di arrivo,
+    # sta di FIANCO al pedone che muove. va tolto a mano
+    if pezzo.lower() == 'p' and (r2, c2) == en_passant:
+        board[r1][c2] = '.'
+
+    # ARROCCO: il re si sposta di due colonne e la torre lo scavalca.
+    # e' l'unica mossa in cui si muovono due pezzi insieme
+    if pezzo.lower() == 'k' and abs(c2 - c1) == 2:
+        if c2 == 6:                     # lato re: la torre da h va in f
+            board[r1][5] = board[r1][7]
+            board[r1][7] = '.'
+        else:                           # lato donna: la torre da a va in d
+            board[r1][3] = board[r1][0]
+            board[r1][0] = '.'
+
+    board[r2][c2] = pezzo
+    board[r1][c1] = '.'
+
+    # PROMOZIONE: il pedone che arriva in fondo diventa donna.
+    # in teoria si potrebbe scegliere anche torre, alfiere o cavallo,
+    # ma nella pratica quasi nessuno lo fa
+    if pezzo == 'P' and r2 == 0:
+        board[r2][c2] = 'Q'
+    elif pezzo == 'p' and r2 == 7:
+        board[r2][c2] = 'q'
+
+
+def muovi(board, partenza, arrivo):
+    # spostamento semplice, senza stato di partita
+    applica(board, partenza, arrivo)
 
 
 # ---------------------------------------------------------------
 # lo scacco
 # ---------------------------------------------------------------
 
+def caselle_attaccate(board, casella):
+    # le caselle che un pezzo tiene SOTTO TIRO.
+    # per quasi tutti i pezzi coincidono con le mosse, ma il pedone
+    # fa eccezione: si muove in avanti e attacca in diagonale, e le
+    # due cose non vanno confuse quando si guarda chi controlla cosa
+    r, c = casella
+    pezzo = board[r][c]
+
+    if pezzo.lower() == 'p':
+        avanti = -1 if pezzo.isupper() else 1
+        attaccate = []
+        for dc in (-1, 1):
+            nr, nc = r + avanti, c + dc
+            if 0 <= nr < 8 and 0 <= nc < 8:
+                attaccate.append((nr, nc))
+        return attaccate
+
+    # niente arrocco qui: l'arrocco non cattura mai, e passare i
+    # diritti farebbe chiamare sotto_scacco dentro sotto_scacco
+    return mosse(board, casella)
+
+
+def casella_attaccata(board, casella, bianco):
+    # la casella e' sotto tiro di almeno un pezzo avversario?
+    # "bianco" e' il colore di CHI SI DIFENDE
+    for r in range(8):
+        for c in range(8):
+            pezzo = board[r][c]
+
+            if pezzo == '.':
+                continue
+            if pezzo.isupper() == bianco:
+                continue    # e' un pezzo mio: non mi attacca
+
+            if casella in caselle_attaccate(board, (r, c)):
+                return True
+
+    return False
+
+
 def trova_re(board, bianco):
-    # scorre la scacchiera finche' non trova il re del colore chiesto.
-    # bianco=True cerca 'K', bianco=False cerca 'k'
+    # scorre la scacchiera finche' non trova il re del colore chiesto
     re = 'K' if bianco else 'k'
 
     for r in range(8):
@@ -222,46 +355,21 @@ def trova_re(board, bianco):
 
 
 def sotto_scacco(board, bianco):
-    # il re e' sotto scacco se ESISTE ALMENO UN pezzo avversario che ha
-    # la casella del re tra le proprie mosse.
-    # non serve nessuna logica nuova: le mosse le sappiamo gia' calcolare
+    # essere sotto scacco vuol dire esattamente una cosa:
+    # la casella dove sta il mio re e' attaccata
     casella_re = trova_re(board, bianco)
 
     if casella_re is None:
         return False
 
-    for r in range(8):
-        for c in range(8):
-            pezzo = board[r][c]
-
-            if pezzo == '.':
-                continue    # casella vuota: non c'e' nessuno da chiedere
-
-            if pezzo.isupper() == bianco:
-                continue    # e' un pezzo mio: non puo' attaccare il mio re
-
-            # e' un pezzo avversario: guardo dove arriva.
-            # appena ne trovo uno che arriva sul re ho finito,
-            # non serve controllare gli altri
-            if casella_re in mosse(board, (r, c)):
-                return True
-
-    return False
+    return casella_attaccata(board, casella_re, bianco)
 
 
 # ---------------------------------------------------------------
 # le mosse legali
 # ---------------------------------------------------------------
 
-def copia_board(board):
-    # copia VERA della scacchiera: una lista nuova per ogni riga.
-    # attenzione, board[:] oppure list(board) NON bastano: creerebbero
-    # una lista nuova che pero' contiene le STESSE otto righe, e
-    # modificando la copia si modificherebbe anche l'originale
-    return [riga[:] for riga in board]
-
-
-def mosse_legali(board, casella):
+def mosse_legali(board, casella, en_passant=None, arrocco=None):
     # una mossa e' legale se, DOPO averla fatta, il mio re non e'
     # sotto scacco. l'unico modo per saperlo e' provarla: la eseguo
     # su una copia della scacchiera e guardo com'e' finita
@@ -274,9 +382,9 @@ def mosse_legali(board, casella):
     io_sono_bianco = pezzo.isupper()
     legali = []
 
-    for arrivo in mosse(board, casella):
+    for arrivo in mosse(board, casella, en_passant, arrocco):
         prova = copia_board(board)
-        muovi(prova, casella, arrivo)
+        applica(prova, casella, arrivo, en_passant)
 
         # la scacchiera vera non e' stata toccata: ho mosso solo la copia
         if not sotto_scacco(prova, io_sono_bianco):
@@ -285,7 +393,7 @@ def mosse_legali(board, casella):
     return legali
 
 
-def tutte_le_mosse_legali(board, bianco):
+def tutte_le_mosse_legali(board, bianco, en_passant=None, arrocco=None):
     # tutte le mosse che un colore puo' fare, come coppie
     # (partenza, arrivo). e' la lista da cui il motore scegliera'
     tutte = []
@@ -297,114 +405,179 @@ def tutte_le_mosse_legali(board, bianco):
             if pezzo == '.' or pezzo.isupper() != bianco:
                 continue
 
-            for arrivo in mosse_legali(board, (r, c)):
+            for arrivo in mosse_legali(board, (r, c), en_passant, arrocco):
                 tutte.append(((r, c), arrivo))
 
     return tutte
 
 
 # ---------------------------------------------------------------
+# fine partita
+# ---------------------------------------------------------------
+
+def scacco_matto(board, bianco, en_passant=None, arrocco=None):
+    # nessuna mossa disponibile E il re sotto attacco: hai perso
+    return (sotto_scacco(board, bianco)
+            and not tutte_le_mosse_legali(board, bianco, en_passant, arrocco))
+
+
+def stallo(board, bianco, en_passant=None, arrocco=None):
+    # nessuna mossa disponibile ma il re NON e' sotto attacco:
+    # la partita finisce patta. e' l'unico caso in cui non poter
+    # muovere non e' una sconfitta
+    return (not sotto_scacco(board, bianco)
+            and not tutte_le_mosse_legali(board, bianco, en_passant, arrocco))
+
+
+# ---------------------------------------------------------------
+# la partita: la scacchiera piu' quello che la scacchiera non dice
+# ---------------------------------------------------------------
+
+def partita_iniziale():
+    # arrocco ed en passant non si possono dedurre guardando la
+    # scacchiera: dipendono da cosa e' successo PRIMA. quindi oltre
+    # alla posizione serve tenersi da parte un po' di storia
+    return {
+        'board': board_iniziale(),
+        'tocca_al_bianco': True,
+        # K = bianco lato re, Q = bianco lato donna, minuscole = nero
+        'arrocco': {'K': True, 'Q': True, 'k': True, 'q': True},
+        'en_passant': None,
+    }
+
+
+def mosse_del_pezzo(partita, casella):
+    return mosse_legali(partita['board'], casella,
+                        partita['en_passant'], partita['arrocco'])
+
+
+def mosse_del_turno(partita):
+    return tutte_le_mosse_legali(partita['board'], partita['tocca_al_bianco'],
+                                 partita['en_passant'], partita['arrocco'])
+
+
+def esegui_mossa(partita, partenza, arrivo):
+    board = partita['board']
+    r1, c1 = partenza
+    r2, c2 = arrivo
+    pezzo = board[r1][c1]
+
+    applica(board, partenza, arrivo, partita['en_passant'])
+
+    # l'en passant vale SOLO per la mossa immediatamente successiva:
+    # o lo sfrutti subito o il diritto scade
+    if pezzo.lower() == 'p' and abs(r2 - r1) == 2:
+        partita['en_passant'] = ((r1 + r2) // 2, c1)
+    else:
+        partita['en_passant'] = None
+
+    # i diritti di arrocco invece si perdono PER SEMPRE, appena il re
+    # o una torre si muovono. e anche se la torre viene mangiata:
+    # per questo guardo sia la partenza sia l'arrivo
+    diritti = partita['arrocco']
+
+    if pezzo == 'K':
+        diritti['K'] = False
+        diritti['Q'] = False
+    elif pezzo == 'k':
+        diritti['k'] = False
+        diritti['q'] = False
+
+    for angolo in (partenza, arrivo):
+        if angolo == (7, 7):
+            diritti['K'] = False
+        elif angolo == (7, 0):
+            diritti['Q'] = False
+        elif angolo == (0, 7):
+            diritti['k'] = False
+        elif angolo == (0, 0):
+            diritti['q'] = False
+
+    partita['tocca_al_bianco'] = not partita['tocca_al_bianco']
+
+
+# ---------------------------------------------------------------
 # prove
 # ---------------------------------------------------------------
 
-def prova(titolo, board, casella):
-    trovate = [nome_casella(m) for m in mosse(board, casella)]
-    print(titolo)
-    print('  da', nome_casella(casella), '->', sorted(trovate))
+def elenco(mosse_trovate):
+    return sorted(nome_casella(m) for m in mosse_trovate)
 
 
-b = board_iniziale()
-stampa(b)
-print()
-
-prova('cavallo b1 (salta i suoi pedoni):', b, (7, 1))
-prova('donna d1 (chiusa dai suoi pezzi):', b, (7, 3))
-prova('pedone e2:', b, (6, 4))
-
-print()
-
-# scacchiera vuota con qualche pezzo piazzato a mano
-b = board_vuota()
-b[4][3] = 'Q'   # donna bianca in d4
-b[4][6] = 'p'   # pedone nero in g4
-b[6][3] = 'P'   # pedone bianco in d2
-prova('donna d4, pedone nero in g4 e pedone bianco in d2:', b, (4, 3))
+print('--- matto e stallo ---')
 
 b = board_vuota()
-b[0][0] = 'N'   # cavallo bianco in a8, nell'angolo
-prova("cavallo in a8 (nell'angolo, meta' dei salti finisce fuori):", b, (0, 0))
+b[0][7] = 'k'   # re nero in h8
+b[0][0] = 'R'   # torre bianca in a8: scacco sull'ottava
+b[1][0] = 'R'   # torre bianca in a7: toglie la settima
+b[7][4] = 'K'
+print('matto di scala   -> matto:', scacco_matto(b, False),
+      ' stallo:', stallo(b, False))
 
 b = board_vuota()
-b[4][4] = 'K'   # re bianco in e4
-b[3][4] = 'p'   # pedone nero in e5
-b[5][4] = 'P'   # pedone bianco in e3
-prova('re e4, pedone nero in e5 e pedone bianco in e3:', b, (4, 4))
+b[0][0] = 'k'   # re nero in a8
+b[1][2] = 'Q'   # donna bianca in c7
+b[7][4] = 'K'
+print('re nero in a8, donna bianca in c7 -> matto:', scacco_matto(b, False),
+      ' stallo:', stallo(b, False))
 
 
 print()
-print('--- scacco ---')
-
-
-def prova_scacco(titolo, board):
-    print(titolo)
-    print('  bianco sotto scacco?', sotto_scacco(board, True))
-
-
-prova_scacco('posizione iniziale:', board_iniziale())
+print('--- promozione ---')
 
 b = board_vuota()
-b[7][4] = 'K'   # re bianco in e1
-b[0][4] = 'r'   # torre nera in e8, stessa colonna
-prova_scacco('re bianco e1, torre nera e8 sulla stessa colonna:', b)
-
-b[4][4] = 'P'   # pedone bianco in e4, in mezzo ai due
-prova_scacco('   ...con un pedone bianco in e4 a fare da scudo:', b)
-
-b = board_vuota()
-b[7][4] = 'K'   # re bianco in e1
-b[5][5] = 'n'   # cavallo nero in f3
-b[6][4] = 'P'   # pedone bianco in e2: non serve a niente, il cavallo salta
-b[6][5] = 'P'   # pedone bianco in f2
-prova_scacco('re bianco e1, cavallo nero f3 (i pedoni non lo fermano):', b)
-
-b = board_vuota()
-b[4][4] = 'K'   # re bianco in e4
-b[3][3] = 'p'   # pedone nero in d5: attacca in diagonale
-prova_scacco('re bianco e4, pedone nero in d5 (diagonale):', b)
-
-b = board_vuota()
-b[4][4] = 'K'   # re bianco in e4
-b[3][4] = 'p'   # pedone nero in e5: gli sta davanti, ma non attacca
-prova_scacco('re bianco e4, pedone nero in e5 (frontale):', b)
+b[1][0] = 'P'   # pedone bianco in a7
+b[7][4] = 'K'
+b[0][7] = 'k'
+muovi(b, (1, 0), (0, 0))
+print('pedone bianco da a7 ad a8, diventa:', b[0][0])
 
 
 print()
-print('--- mosse legali ---')
+print('--- en passant ---')
+
+p = partita_iniziale()
+esegui_mossa(p, (6, 4), (4, 4))   # 1. e4
+esegui_mossa(p, (1, 0), (3, 0))   # 1... a5
+esegui_mossa(p, (4, 4), (3, 4))   # 2. e5
+esegui_mossa(p, (1, 3), (3, 3))   # 2... d5, doppio passo accanto al pedone e5
+print('il nero ha appena giocato d5, casella di en passant:',
+      nome_casella(p['en_passant']))
+print('mosse del pedone bianco in e5:', elenco(mosse_del_pezzo(p, (3, 4))))
+
+esegui_mossa(p, (3, 4), (2, 3))   # 3. exd6 en passant
+print('dopo exd6, il pedone nero in d5 e\' ancora li\'?',
+      p['board'][3][3] != '.')
 
 
-def confronta(titolo, board, casella):
-    pseudo = [nome_casella(m) for m in mosse(board, casella)]
-    legali = [nome_casella(m) for m in mosse_legali(board, casella)]
-    print(titolo)
-    print('  pseudo-legali:', sorted(pseudo))
-    print('  legali:       ', sorted(legali))
-
-
-b = board_vuota()
-b[7][4] = 'K'   # re bianco in e1
-b[6][4] = 'B'   # alfiere bianco in e2
-b[0][4] = 'r'   # torre nera in e8: inchioda l'alfiere
-confronta("alfiere e2 inchiodato dalla torre in e8:", b, (6, 4))
-
-b = board_vuota()
-b[7][4] = 'K'   # re bianco in e1
-b[0][3] = 'r'   # torre nera in d8: controlla tutta la colonna d
-confronta('re e1 con la torre nera che controlla la colonna d:', b, (7, 4))
+print()
+print('--- arrocco ---')
 
 b = board_vuota()
 b[7][4] = 'K'   # re bianco in e1
-b[0][4] = 'r'   # torre nera in e8: scacco
-b[6][0] = 'R'   # torre bianca in a2
-confronta('torre bianca a2, con il proprio re sotto scacco:', b, (6, 0))
-print('  il bianco in totale ha',
-      len(tutte_le_mosse_legali(b, True)), 'mosse legali')
+b[7][0] = 'R'   # torre bianca in a1
+b[7][7] = 'R'   # torre bianca in h1
+b[0][4] = 'k'
+diritti = {'K': True, 'Q': True, 'k': True, 'q': True}
+print('re e1 con entrambe le torri:',
+      elenco(mosse_legali(b, (7, 4), None, diritti)))
+
+b[0][5] = 'r'   # torre nera in f8: tiene sotto tiro tutta la colonna f
+print('   ...con una torre nera che controlla la colonna f:',
+      elenco(mosse_legali(b, (7, 4), None, diritti)))
+
+b[0][5] = '.'
+diritti_persi = {'K': False, 'Q': True, 'k': True, 'q': True}
+print('   ...dopo che la torre in h1 si e\' mossa:',
+      elenco(mosse_legali(b, (7, 4), None, diritti_persi)))
+
+p = partita_iniziale()
+for mossa in [((6, 4), (4, 4)), ((1, 4), (3, 4)),      # e4 e5
+              ((7, 6), (5, 5)), ((0, 6), (2, 5)),      # Cf3 Cf6
+              ((7, 5), (4, 2)), ((0, 5), (3, 2))]:     # Ac4 Ac5
+    esegui_mossa(p, mossa[0], mossa[1])
+print('partita vera, il bianco ora puo\' arroccare:',
+      elenco(mosse_del_pezzo(p, (7, 4))))
+esegui_mossa(p, (7, 4), (7, 6))
+print('dopo l\'arrocco corto:')
+stampa(p['board'])

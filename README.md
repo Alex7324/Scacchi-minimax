@@ -16,14 +16,16 @@ In sviluppo. Attualmente implementati:
   donna, re
 - rilevamento dello scacco
 - generazione delle mosse legali, con gestione delle inchiodature
+- scacco matto e stallo
+- mosse speciali: arrocco, en passant, promozione
 
-Le mosse di ciascun pezzo vengono prima calcolate come **pseudo-legali** — dove
-il pezzo può arrivare in base al proprio movimento, senza considerare lo scacco
-— e poi filtrate simulando ogni mossa su una copia della scacchiera e
-scartando quelle che lasciano il proprio re sotto attacco.
+Le regole del gioco sono complete. Le mosse di ciascun pezzo vengono prima
+calcolate come **pseudo-legali** — dove il pezzo può arrivare in base al proprio
+movimento, senza considerare lo scacco — e poi filtrate simulando ogni mossa su
+una copia della scacchiera e scartando quelle che lasciano il proprio re sotto
+attacco.
 
-Mancano ancora le tre mosse speciali (arrocco, en passant, promozione) e il
-riconoscimento di scacco matto e stallo.
+Manca il motore: valutazione della posizione, ricerca e interfaccia di gioco.
 
 ## Requisiti e avvio
 
@@ -79,6 +81,11 @@ modo e cattura in un altro.
 `mosse(board, casella)` individua il pezzo presente sulla casella e delega alla
 funzione corrispondente.
 
+Arrocco ed en passant non sono deducibili dalla sola posizione dei pezzi:
+dipendono da cosa è accaduto in precedenza. Per questo lo stato di una partita è
+un dizionario che affianca alla scacchiera il turno, i diritti di arrocco
+residui e l'eventuale casella di en passant, aggiornati da `esegui_mossa`.
+
 ## Roadmap
 
 Regole del gioco:
@@ -87,8 +94,8 @@ Regole del gioco:
 - [x] mosse pseudo-legali di tutti i pezzi
 - [x] rilevamento dello scacco
 - [x] mosse legali: esclusione di quelle che lasciano il proprio re sotto scacco
-- [ ] scacco matto e stallo
-- [ ] arrocco, en passant, promozione del pedone
+- [x] scacco matto e stallo
+- [x] arrocco, en passant, promozione del pedone
 
 Motore:
 
