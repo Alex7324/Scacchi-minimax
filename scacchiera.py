@@ -250,6 +250,60 @@ def sotto_scacco(board, bianco):
 
 
 # ---------------------------------------------------------------
+# le mosse legali
+# ---------------------------------------------------------------
+
+def copia_board(board):
+    # copia VERA della scacchiera: una lista nuova per ogni riga.
+    # attenzione, board[:] oppure list(board) NON bastano: creerebbero
+    # una lista nuova che pero' contiene le STESSE otto righe, e
+    # modificando la copia si modificherebbe anche l'originale
+    return [riga[:] for riga in board]
+
+
+def mosse_legali(board, casella):
+    # una mossa e' legale se, DOPO averla fatta, il mio re non e'
+    # sotto scacco. l'unico modo per saperlo e' provarla: la eseguo
+    # su una copia della scacchiera e guardo com'e' finita
+    r, c = casella
+    pezzo = board[r][c]
+
+    if pezzo == '.':
+        return []
+
+    io_sono_bianco = pezzo.isupper()
+    legali = []
+
+    for arrivo in mosse(board, casella):
+        prova = copia_board(board)
+        muovi(prova, casella, arrivo)
+
+        # la scacchiera vera non e' stata toccata: ho mosso solo la copia
+        if not sotto_scacco(prova, io_sono_bianco):
+            legali.append(arrivo)
+
+    return legali
+
+
+def tutte_le_mosse_legali(board, bianco):
+    # tutte le mosse che un colore puo' fare, come coppie
+    # (partenza, arrivo). e' la lista da cui il motore scegliera'
+    tutte = []
+
+    for r in range(8):
+        for c in range(8):
+            pezzo = board[r][c]
+
+            if pezzo == '.' or pezzo.isupper() != bianco:
+                continue
+
+            for arrivo in mosse_legali(board, (r, c)):
+                tutte.append(((r, c), arrivo))
+
+    return tutte
+
+
+# ---------------------------------------------------------------
 # prove
 # ---------------------------------------------------------------
 
@@ -322,3 +376,35 @@ b = board_vuota()
 b[4][4] = 'K'   # re bianco in e4
 b[3][4] = 'p'   # pedone nero in e5: gli sta davanti, ma non attacca
 prova_scacco('re bianco e4, pedone nero in e5 (frontale):', b)
+
+
+print()
+print('--- mosse legali ---')
+
+
+def confronta(titolo, board, casella):
+    pseudo = [nome_casella(m) for m in mosse(board, casella)]
+    legali = [nome_casella(m) for m in mosse_legali(board, casella)]
+    print(titolo)
+    print('  pseudo-legali:', sorted(pseudo))
+    print('  legali:       ', sorted(legali))
+
+
+b = board_vuota()
+b[7][4] = 'K'   # re bianco in e1
+b[6][4] = 'B'   # alfiere bianco in e2
+b[0][4] = 'r'   # torre nera in e8: inchioda l'alfiere
+confronta("alfiere e2 inchiodato dalla torre in e8:", b, (6, 4))
+
+b = board_vuota()
+b[7][4] = 'K'   # re bianco in e1
+b[0][3] = 'r'   # torre nera in d8: controlla tutta la colonna d
+confronta('re e1 con la torre nera che controlla la colonna d:', b, (7, 4))
+
+b = board_vuota()
+b[7][4] = 'K'   # re bianco in e1
+b[0][4] = 'r'   # torre nera in e8: scacco
+b[6][0] = 'R'   # torre bianca in a2
+confronta('torre bianca a2, con il proprio re sotto scacco:', b, (6, 0))
+print('  il bianco in totale ha',
+      len(tutte_le_mosse_legali(b, True)), 'mosse legali')
